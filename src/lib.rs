@@ -5,6 +5,7 @@ use vst::buffer::AudioBuffer;
 use vst::editor::Editor;
 use vst::plugin::{Category, Info, Plugin, PluginParameters};
 use vst::util::AtomicFloat;
+use baseview::WindowHandle;
 
 use std::sync::Arc;
 
@@ -19,6 +20,8 @@ use dsp::*;
 struct GainPluginEditor {
     params: Arc<GainEffectParameters>,
     is_open: bool,
+    // We need to keep track of the WindowHandle to close it correctly
+    handle: Option<WindowHandle>
 }
 
 impl Editor for GainPluginEditor {
@@ -43,11 +46,13 @@ impl Editor for GainPluginEditor {
             .with_inner_size(300, 300)
             .with_title("Hello Plugin");
 
-        Application::new(window_description, move |cx| {
+        let handle = Application::new(window_description, move |cx| {
 
             plugin_gui(cx, params.clone());
     
         }).open_parented(&ParentWindow(parent));
+
+        self.handle = Some(handle);
 
         true
     }
@@ -58,12 +63,16 @@ impl Editor for GainPluginEditor {
 
     fn close(&mut self) {
         self.is_open = false;
+        // If the host calls close on the editor, the editor needs to call close on its window_handle
+        if let Some(mut handle) = self.handle.take() {
+            handle.close();
+        }
     }
 }
 
 struct GainPlugin {
     params: Arc<GainEffectParameters>,
-    editor: Option<GainPluginEditor>,
+    // editor: Option<GainPluginEditor>,
 }
 
 impl Default for GainPlugin {
@@ -71,10 +80,7 @@ impl Default for GainPlugin {
         let params = Arc::new(GainEffectParameters::default());
         Self {
             params: params.clone(),
-            editor: Some(GainPluginEditor {
-                params: params.clone(),
-                is_open: false,
-            }),
+            
         }
     }
 }
@@ -115,11 +121,12 @@ impl Plugin for GainPlugin {
     }
 
     fn get_editor(&mut self) -> Option<Box<dyn Editor>> {
-        if let Some(editor) = self.editor.take() {
-            Some(Box::new(editor) as Box<dyn Editor>)
-        } else {
-            None
-        }
+        // Construct the editor here since it isn't Send
+        Some(Box::new(GainPluginEditor {
+            params: self.params.clone(),
+            is_open: false,
+            handle: None,
+        }))
     }
 
     // Here is where the bulk of our audio processing code goes.

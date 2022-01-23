@@ -23,3 +23,5 @@ dirs = "3"
 log = "0.4"
 log-panics = "2"
 simplelog = "0.8"
+# for the WindowHandle
+baseview = { git = "https://github.com/RustAudio/baseview.git", rev = "f6e99e9aa6f5aeb6b721cb05e4d882a51d995909" }
